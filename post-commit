@@ -1,0 +1,24 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+import os, sys, re
+from PySvnHooks import PySvnHook, PostCommitHook
+
+def usage_and_exit( error_message = None ):
+  """Print usage information and exit."""
+  stream = ( error_message and sys.stderr ) or sys.stdout
+  if error_message:
+    stream.write( "ERROR: %s\n\n" % error_message )
+  stream.write(
+    "USAGE: %s REPOSITORY REVISION_NUMBER\n"
+    % ( os.path.basename( sys.argv[ 0 ] ) )
+  )
+  sys.exit( ( error_message and 1 ) or 0 )
+
+
+if __name__ == '__main__':
+  if len( sys.argv ) != 3:
+    """Expects to be called by `svnserve` with two arguments"""
+    usage_and_exit( )
+  else:
+    """See?"""
+    sys.exit( PostCommitHook( repository=sys.argv[ 1 ], revision=sys.argv[ 2 ] ).run_tests() )

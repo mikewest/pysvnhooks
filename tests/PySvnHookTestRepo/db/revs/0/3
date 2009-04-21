@@ -1,0 +1,68 @@
+DELTA
+SVNENDREP
+id: 2-3.0.r3/17
+type: file
+count: 0
+text: 3 0 4 0 d41d8cd98f00b204e9800998ecf8427e
+cpath: /branches/production/production.html
+copyroot: 0 /
+
+PLAIN
+K 15
+production.html
+V 16
+file 2-3.0.r3/17
+END
+ENDREP
+id: 1-3.0.r3/219
+type: dir
+count: 0
+text: 3 159 47 47 6674a5fb8081d33bb18d59a99e844934
+cpath: /branches/production
+copyroot: 0 /
+
+PLAIN
+K 10
+production
+V 16
+dir 1-3.0.r3/219
+END
+ENDREP
+id: 0-3.0.r3/404
+type: dir
+count: 0
+text: 3 349 42 42 5f93ae68d6eee36ad921bf9a4cff3879
+cpath: /branches
+copyroot: 0 /
+
+PLAIN
+K 8
+branches
+V 16
+dir 0-3.0.r3/404
+K 9
+test.file
+V 16
+file 0-1.0.r1/17
+K 10
+test1.file
+V 16
+file 0-2.0.r2/17
+END
+ENDREP
+id: 0.0.r3/649
+type: dir
+pred: 0.0.r2/225
+count: 3
+text: 3 523 113 113 04270786eab0bc716b27cae7a45e470a
+cpath: /
+copyroot: 0 /
+
+_2.0.t2-2 add true false /branches/production/production.html
+
+_0.0.t2-2 add false false /branches
+
+_1.0.t2-2 add false false /branches/production
+
+
+649 777

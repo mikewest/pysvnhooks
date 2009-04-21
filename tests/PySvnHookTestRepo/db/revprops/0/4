@@ -1,0 +1,13 @@
+K 10
+svn:author
+V 7
+svnm157
+K 8
+svn:date
+V 27
+2009-04-16T15:50:14.702044Z
+K 7
+svn:log
+V 57
+This is a static file, which I shouldn't be able to edit.
+END
