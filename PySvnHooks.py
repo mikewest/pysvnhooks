@@ -58,9 +58,10 @@ class PySvnHook( object ):
     #   Some helpful class constants
     #
     COMPRESSION_BOT     = settings.HEADLESS_USERNAME
-    TICKET_REGEX        = re.compile( r'[A-Z]+-\d+'    )
+    TICKET_REGEX        = re.compile( r'[a-zA-Z]+-\d+'    )
     PRODUCTION_REGEX    = re.compile( r'/production/'  )
     STATICS_REGEX       = re.compile( r'/statics/'     )
+    NONSDE_REGEX        = re.compile( r'/(flashdevelopment|orm)/' )
     VIEWER_URL          = settings.VIEWER_URL
     VALID_RECIPIENTS    = settings.VALID_RECIPIENTS
     COMMIT_EMAIL_LIST   = settings.COMMIT_EMAIL_LIST
@@ -126,7 +127,10 @@ class PySvnHook( object ):
 
     def is_production( self ):
         return self.is_path( PySvnHook.PRODUCTION_REGEX )
-    
+   
+    def is_only_sde( self ):
+        return not self.is_path( PySvnHook.NONSDE_REGEX )
+
     def is_static( self ):
         return self.is_path( PySvnHook.STATICS_REGEX)
 
@@ -142,7 +146,7 @@ class PreCommitHook( PySvnHook ):
     def run_tests( self ):
         return (
                 self.is_log_nonempty()
-            or  self.is_production_change_tied_to_bug()
+            or  self.is_sde_change_not_tied_to_bug()
             or  self.is_headless_user_authorized()
         )
 
@@ -161,17 +165,20 @@ class PreCommitHook( PySvnHook ):
 #                                                                   #
 #####################################################################
             """)
-            return 1
 
-    def is_production_change_tied_to_bug( self ):
-        if self.is_production() and not self.is_tied_to_bug():
+    def is_sde_change_not_tied_to_bug( self ):
+        if self.is_only_sde() and not self.is_tied_to_bug():
             return self.error( """
 #####################################################################
 #   COMMIT FAILURE                                                  #
 #                                                                   #
-#   When committing to production, your commit message _must_       #
-#   contain reference to a Jira ticket in the format                #
-#   `[JIRATYPE-ID]` (e.g. "Fixing [FRONT-123]")' )                  #
+#   Your commit message must contain at least one reference to a    #
+#   Jira ticket in the format `[JIRATYPE-ID]` (e.g. "Fixing         #
+#   [FRONT-123]")' ).  If you aren't work on on a Jira ticket, go   #
+#   create one!  Or, if a ticket is _really_ unnecessary, please    #
+#   use `[WWW-17]` our no-ticket ticket.                            #
+#                                                                   #
+#   Thanks!                                                         #
 #                                                                   #
 #####################################################################
             """)
@@ -234,13 +241,13 @@ class PostCommitHook( PySvnHook ):
 #   you're doing, and that it appears in your commit message (e.g.  #
 #   "Fixed [WWW-14]")!                                              #
 #                                                                   #
-#   If your change is so small that iyou don't believe that it      #
+#   If your change is so small that you don't believe that it       #
 #   requires a ticket, please mark it with "[WWW-17]", our          #
 #   "no ticket" ticket.                                             #
 #                                                                   #
 #####################################################################
             """)
-            return 1
+            return 0 
         return 0
     
     def communicate( self ):
@@ -261,12 +268,21 @@ class PostCommitHook( PySvnHook ):
         
     def send_notification_emails( self, email_list ):
         tinyurl = self.tinyize( PySvnHook.VIEWER_URL % self._rev )
+        params  = {
+                    'from':     settings.EMAIL_FROM_ADDRESS,
+                    'repo':     os.path.basename( self._repo ),
+                    'author':   self._author,
+                    'rev':      self._rev,
+                    'tinyurl':  tinyurl,
+                    'log':      self._log,
+                    'to_list':  ", ".join( email_list )
+                  }
         message = """\
-From: sdebot@sueddeutsche.de
+From: %(from)s
 To: %(to_list)s
-Subject: %(author)s committed revision #%(rev)d
+Subject: [%(repo)s] %(author)s committed r%(rev)d
 
-Hello!  %(author)s committed revision #%(rev)d to SVN.  If you've got a minute, take a look:
+Hello!  %(author)s committed r%(rev)d to SVN.  If you've got a minute, take a look:
 
 ---- COMMIT LOG --------------------------------------------------
 
@@ -279,7 +295,8 @@ Hello!  %(author)s committed revision #%(rev)d to SVN.  If you've got a minute, 
 
 Thanks for your attention!
 
--The Friendly SDE SVN Bot""" % ( { 'author': self._author, 'rev': self._rev, 'tinyurl': tinyurl, 'log': self._log, 'to_list': ", ".join( email_list ) })
+-The Friendly SDE SVN Bot""" % ( params )
+
         self.email( to=email_list, message=message )
         
     def post_to_twitter( self ):
@@ -289,7 +306,7 @@ Thanks for your attention!
         if self.VALID_RECIPIENTS.has_key( author ) and self.VALID_RECIPIENTS[ author ].has_key( 'twitter' ):
             author = '@%s' % self.VALID_RECIPIENTS[ author ][ 'twitter' ]
         
-        message = "%s committed revision #%d: %s" % ( author, self._rev, tinyurl )
+        message = "%s committed r%d to production: %s" % ( author, self._rev, tinyurl )
         self.tweet( message )
     
     def send_dms( self, dm_list ):
@@ -300,5 +317,5 @@ Thanks for your attention!
             author = '@%s' % self.VALID_RECIPIENTS[ author ][ 'twitter' ]
         
         for dm in dm_list:
-            message = "%s would like you to take a look at revision #%d: %s" % ( self._author, self._rev, tinyurl )
+            message = "%s would like you to take a look at r%d: %s" % ( self._author, self._rev, tinyurl )
             self.tweet( message, dm )
