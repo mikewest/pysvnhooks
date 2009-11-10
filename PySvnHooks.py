@@ -35,9 +35,9 @@ class Emailer( object ):
             server = smtplib.SMTP( 'localhost' )
             server.sendmail( settings.EMAIL_FROM_ADDRESS, to, message )
             server.quit()
-            return true
+            return True
         except smtplib.SMTPException:
-            return false
+            return False
             
 class Tinyizer( object ):
     def __init__( self ):
@@ -57,12 +57,13 @@ class PySvnHook( object ):
     #
     #   Some helpful class constants
     #
-    COMPRESSION_BOT  = settings.HEADLESS_USERNAME
-    TICKET_REGEX     = re.compile( r'[A-Z]+-\d+'    )
-    PRODUCTION_REGEX = re.compile( r'/production/'  )
-    STATICS_REGEX    = re.compile( r'/statics/'     )
-    VIEWER_URL       = settings.VIEWER_URL
-    VALID_RECIPIENTS = settings.VALID_RECIPIENTS
+    COMPRESSION_BOT     = settings.HEADLESS_USERNAME
+    TICKET_REGEX        = re.compile( r'[A-Z]+-\d+'    )
+    PRODUCTION_REGEX    = re.compile( r'/production/'  )
+    STATICS_REGEX       = re.compile( r'/statics/'     )
+    VIEWER_URL          = settings.VIEWER_URL
+    VALID_RECIPIENTS    = settings.VALID_RECIPIENTS
+    COMMIT_EMAIL_LIST   = settings.COMMIT_EMAIL_LIST
     
     def __init__( self, repository = None, txn_name = None, revision = None, twitterer = None, emailer = None, tinyizer = None ):
         self._repo      = repository
@@ -107,7 +108,7 @@ class PySvnHook( object ):
         self._emailer.email( to=to, message=message )
     
     def tinyize( self, url ):
-        self._tiny.tinyize( url=url )
+        return self._tiny.tinyize( url=url )
     
     #
     #   Bug-based helpers
@@ -168,8 +169,9 @@ class PreCommitHook( PySvnHook ):
 #####################################################################
 #   COMMIT FAILURE                                                  #
 #                                                                   #
-#   Your commit message should contain reference to a Jira ticket   #
-#   in the format `[JIRATYPE-ID]` (e.g. "Fixing [FRONT-123]")' )    #
+#   When committing to production, your commit message _must_       #
+#   contain reference to a Jira ticket in the format                #
+#   `[JIRATYPE-ID]` (e.g. "Fixing [FRONT-123]")' )                  #
 #                                                                   #
 #####################################################################
             """)
@@ -232,8 +234,9 @@ class PostCommitHook( PySvnHook ):
 #   you're doing, and that it appears in your commit message (e.g.  #
 #   "Fixed [WWW-14]")!                                              #
 #                                                                   #
-#   If your change is so small that it probably doesn't deserve a   #
-#   ticket, please mark it with "[WWW-17]", our "no ticket" ticket. #
+#   If your change is so small that iyou don't believe that it      #
+#   requires a ticket, please mark it with "[WWW-17]", our          #
+#   "no ticket" ticket.                                             #
 #                                                                   #
 #####################################################################
             """)
@@ -244,37 +247,46 @@ class PostCommitHook( PySvnHook ):
         if self.is_production():
             self.post_to_twitter()
         
-        has_        = lambda y, x: (self.VALID_RECIPIENTS.has_key( x ) and self.VALID_RECIPIENTS[ x ][ y ] is not None)
+        has_        = lambda y, x: (self.VALID_RECIPIENTS.has_key( x ) and self.VALID_RECIPIENTS[ x ].has_key( y ) and self.VALID_RECIPIENTS[ x ][ y ] is not None)
         people      = re.findall( r'@([-a-zA-Z0-9_]+)', self._log )
         
         email_list  = [ self.VALID_RECIPIENTS[ person ][ 'email' ]   for person in people if has_( 'email', person ) ]
         dm_list     = [ self.VALID_RECIPIENTS[ person ][ 'twitter' ] for person in people if has_( 'twitter', person ) ]
         
+        if self.COMMIT_EMAIL_LIST is not None:
+            email_list.append( self.COMMIT_EMAIL_LIST )
+
         self.send_notification_emails( email_list )
         self.send_dms( dm_list )
         
     def send_notification_emails( self, email_list ):
         tinyurl = self.tinyize( PySvnHook.VIEWER_URL % self._rev )
-        message = """
-Hello!  %(author)s committed revision #%(rev)d to SVN, and thinks you might be interested in the changeset.  If you've got a minute, take a look: %(tinyurl)s
+        message = """\
+From: sdebot@sueddeutsche.de
+To: %(to_list)s
+Subject: %(author)s committed revision #%(rev)d
 
+Hello!  %(author)s committed revision #%(rev)d to SVN.  If you've got a minute, take a look:
 
 ---- COMMIT LOG --------------------------------------------------
 
 %(log)s
 
+
+* Details at: %(tinyurl)s
+
 ------------------------------------------------- /COMMIT LOG ----
 
 Thanks for your attention!
 
--The Friendly SVN Bot""" % ( { 'author': self._author, 'rev': self._rev, 'tinyurl': tinyurl, 'log': self._log })
+-The Friendly SDE SVN Bot""" % ( { 'author': self._author, 'rev': self._rev, 'tinyurl': tinyurl, 'log': self._log, 'to_list': ", ".join( email_list ) })
         self.email( to=email_list, message=message )
         
     def post_to_twitter( self ):
         tinyurl = self.tinyize( PySvnHook.VIEWER_URL % self._rev )
         
         author = self._author
-        if self.VALID_RECIPIENTS.has_key( author ) and self.VALID_RECIPIENTS[ author ][ 'twitter' ] is not None:
+        if self.VALID_RECIPIENTS.has_key( author ) and self.VALID_RECIPIENTS[ author ].has_key( 'twitter' ):
             author = '@%s' % self.VALID_RECIPIENTS[ author ][ 'twitter' ]
         
         message = "%s committed revision #%d: %s" % ( author, self._rev, tinyurl )
@@ -284,7 +296,7 @@ Thanks for your attention!
         tinyurl = self.tinyize( PySvnHook.VIEWER_URL % self._rev )
         
         author  = self._author
-        if self.VALID_RECIPIENTS.has_key( author ) and self.VALID_RECIPIENTS[ author ][ 'twitter' ] is not None:
+        if self.VALID_RECIPIENTS.has_key( author ) and self.VALID_RECIPIENTS[ author ].has_key( 'twitter' ):
             author = '@%s' % self.VALID_RECIPIENTS[ author ][ 'twitter' ]
         
         for dm in dm_list:
